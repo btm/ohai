@@ -23,10 +23,7 @@ describe Ohai::System, "Linux virtualization platform" do
     @ohai = Ohai::System.new
     @ohai[:os] = "linux"
     @ohai.stub!(:require_plugin).and_return(true)
-    # Create a version of from_file that does not use File.exists? so we can stub it
-    def @ohai.from_file(filename)
-      self.instance_eval(IO.read(filename), filename, 1)
-    end
+    @ohai.extend(SimpleFromFile)
     File.stub!(:exists?).with("/proc/cpuinfo").and_return(false)
     File.stub!(:exists?).with("/proc/modules").and_return(false)
     File.stub!(:exists?).with("/proc/xen/capabilities").and_return(false)
