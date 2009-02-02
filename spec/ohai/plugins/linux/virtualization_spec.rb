@@ -23,27 +23,63 @@ describe Ohai::System, "Linux virtualization platform" do
     @ohai = Ohai::System.new
     @ohai[:os] = "linux"
     @ohai.stub!(:require_plugin).and_return(true)
-    @mock_cap = mock("/proc/xen/capabilities")
-    @mock_cap.stub!(:each).and_yield("control_d")
+    # Create a version of from_file that does not use File.exists? so we can stub it
+    def @ohai.from_file(filename)
+      self.instance_eval(IO.read(filename), filename, 1)
+    end
+    File.stub!(:exists?).with("/proc/cpuinfo").and_return(false)
+    File.stub!(:exists?).with("/proc/modules").and_return(false)
+    File.stub!(:exists?).with("/proc/xen/capabilities").and_return(false)
+    File.stub!(:exists?).with("/proc/sys/xen/independent_wallclock").and_return(false)
+    File.stub!(:exists?).with("/usr/sbin/dmidecode").and_return(false)
   end
 
-  it "should set xen host if /proc/xen/capabilities contains control_d" do
-    @ohai._require_plugin("linux::virtualization")
-    @ohai[:virtualization][:system] == "xen" && @ohai[:virtualization][:role] == "host"
+  describe "when we are involved with xen" do
+    it "should set xen host if /proc/xen/capabilities contains control_d" do
+      File.stub!(:read).and_return("control_d")
+      File.stub!(:exists?).with("/proc/xen/capabilities").and_return(true)
+      @ohai._require_plugin("linux::virtualization")
+      @ohai[:virtualization][:system].should eql("xen")
+      @ohai[:virtualization][:role].should eql("host")
+    end
+
+    it "should set xen guest if /proc/sys/xen/independent_wallclock exists" do
+      File.stub!(:exists?).with("/proc/sys/xen/independent_wallclock").and_return(true)
+      @ohai._require_plugin("linux::virtualization")
+      @ohai[:virtualization][:system].should eql("xen")
+      @ohai[:virtualization][:role].should eql("guest")
+    end
+  
+    it "should not set virtualization if xen isn't there" do
+      File.stub!(:exists?).with("/proc/xen/capabilities").and_return(false)
+      File.stub!(:exists?).with("/proc/sys/xen/independent_wallclock").and_return(false)
+      @ohai._require_plugin("linux::virtualization")
+      @ohai[:virtualization].should eql( {} )
+    end
+  
   end
 
-  it "should set xen guest if /proc/sys/xen/independent_wallclock exists" do
-    File.stub!(:exists).with("/proc/xen/capabilities").and_return(false)
-    File.stub!(:exists).with("/proc/sys/xen/independent_wallclock").and_return(true)
-    @ohai._require_plugin("linux::virtualization")
-    @ohai[:virtualization][:system] == "xen" && @ohai[:virtualization][:role] == "guest"
-  end
+  describe "when we are involved with kvm" do
+    it "should set kvm host if /proc/modules reports such" do
+      File.stub!(:exists?).with("/proc/modules").and_return(true)
+      File.stub!(:read).and_return("kvm                   165872  1 kvm_intel")
+      @ohai._require_plugin("linux::virtualization")
+      @ohai[:virtualization][:system].should eql("kvm")
+      @ohai[:virtualization][:role].should eql("host")
+    end
+  
+    it "should set kvm guest if /proc/cpuinfo shows QEMU" do
+      File.stub!(:exists?).with("/proc/cpuinfo").and_return(true)
+      File.stub!(:read).and_return("model name  : QEMU Virtual CPU version 0.9.1")
+      @ohai._require_plugin("linux::virtualization")
+      @ohai[:virtualization][:system].should eql("kvm")
+      @ohai[:virtualization][:role].should eql("guest")
+    end
 
-  it "should not set virtualization if xen isn't there" do
-    File.stub!(:exists).with("/proc/xen/capabilities").and_return(false)
-    File.stub!(:exists).with("/proc/sys/xen/independent_wallclock").and_return(false)
-    @ohai._require_plugin("linux::virtual")
-    @ohai[:virtualization].nil?
+    it "should not set kvm host if /proc/modules does not exist" do
+      @ohai._require_plugin("linux::virtualization")
+      @ohai[:virtualization].should eql( {} )
+    end
   end
 end
 
