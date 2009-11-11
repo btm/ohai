@@ -208,9 +208,25 @@ module Ohai
     
     # Pretty Print this object as JSON 
     def json_pretty_print
-      JSON.pretty_generate(@data)
+      # Standard JSON.pretty_generate state
+      state = JSON::State.new(
+      :indent     => '  ',
+      :space      => ' ',
+      :object_nl  => "\n",
+      :array_nl   => "\n"
+      )
+
+      result = "{\n"                                                  # begin JSON object
+      sorted_keys = @data.keys.sort                                   # hashes are unordered, create a sorted array index
+      sorted_keys.each_index { |index| 
+        result << "  #{sorted_keys[index].to_json}"                   # json-ify and print the sorted key
+        result << ": #{@data[sorted_keys[index]].to_json(state, 1)}"  # and the value, passing 'state, depth' to match our custom output
+        result << "," unless index == sorted_keys.length - 1          # comma delimited pairs, except at the end
+        result << "\n" }                                              # newline after each object
+      result << "}"                                                   # end JSON object
     end
-    
+   
+    # Print only the requested attributes
     def attributes_print(a)
       JSON.pretty_generate(@data[a])
     end
