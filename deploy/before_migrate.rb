@@ -1,0 +1,1 @@
+puts "IN DEPLOY MIGRATE"
